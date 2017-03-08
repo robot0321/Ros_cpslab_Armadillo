@@ -71,6 +71,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);C:\Users\Owner\Documents\armadillo-7.800.1\include;</IncludePath>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(NETFXKitsDir)Lib\um\x86;C:\Users\Owner\Documents\armadillo-7.800.1\examples\lib_win64;</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -92,6 +94,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>C:\Users\Owner\Documents\armadillo-7.800.1\examples\lib_win64\lapack_win64_MT.lib;C:\Users\Owner\Documents\armadillo-7.800.1\examples\lib_win64\blas_win64_MT.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -145,10 +148,22 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CCDPmap.h" />
+    <ClInclude Include="Cost_avoid.h" />
+    <ClInclude Include="Cost_track.h" />
+    <ClInclude Include="Cost_visual.h" />
+    <ClInclude Include="Gmap.h" />
+    <ClInclude Include="Robot.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CCDPmap.cpp" />
+    <ClCompile Include="Cost_avoid.cpp" />
+    <ClCompile Include="Cost_track.cpp" />
+    <ClCompile Include="Cost_visual.cpp" />
+    <ClCompile Include="Gmap.cpp" />
+    <ClCompile Include="Robot.cpp" />
     <ClCompile Include="Ros_cpslab_Armadillo.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
