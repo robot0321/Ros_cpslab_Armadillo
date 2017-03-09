@@ -77,6 +77,7 @@ void Gmap::set_global_map() {
 arma::fmat* Gmap::getGlobalmap() const{return global_map;}
 
 void Gmap::printGlobalmap() const {
+	std::cout << "********** Gmap **********" << std::endl;
 	for (int i = 0; i<num_yaxis; i++) {
 		for (int j = 0; j<num_xaxis; j++) {
 			if (i == -int(y_rng[0] / grid)) {
@@ -91,6 +92,7 @@ void Gmap::printGlobalmap() const {
 		}
 		std::cout << std::endl;
 	}
+	std::cout << "************************" << std::endl;
 }
 
 

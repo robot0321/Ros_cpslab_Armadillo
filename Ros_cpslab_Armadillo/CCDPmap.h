@@ -24,34 +24,39 @@ private:
 	
 
 
-	arma::fmat* local_map;
-	arma::fmat* Cost_visual;
-	arma::fmat* Cost_avoid;
-	arma::cube* Cost_track;
-	arma::cube* Cost_const; // avoid + const
+	arma::mat local_map;
+	//arma::cube Cost_visual;
+	//arma::cube Cost_avoid;
+	//std::vector<arma::cube> Cost_track;
+	//std::vector<arma::cube> Cost_const; // avoid + const
 
 public:
-	CCDPmap(Gmap* ptr_gmap, std::vector<float> x_rng, std::vector<float> y_rng, int rlen, int clen, int H, float epsilon);
+	CCDPmap(Gmap* ptr_gmap, std::vector<float> x_rng, std::vector<float> y_rng, float epsilon);
 	~CCDPmap();
 
 
 	void grid_resize(int factor);
 
 	void setLocalmap(Gmap* ptr_gmap, std::vector<float> x_rng, std::vector<float> y_rng);
-	arma::fmat* getLocalmap() const;
+	arma::mat getLocalmap() const;
 	void printLocalmap() const;
 
+	float getGrid();
+
+	/*
 	void setCost_visual(int y, int x);
 	void setCost_avoid(int y, int x);
 	void setCost_track(int y, int x, int num);
 	void setCost_const(int y, int x, int num);
 
-	arma::fmat* getCost_visual() const;
-	arma::fmat* getCost_avoid() const;
-	arma::cube* getCost_track() const;
-	arma::cube* getCost_const() const;
 
-	void CCDPmap::initCostfunc(int y, int x, int num);
+	arma::cube getCost_visual() const;
+	arma::cube getCost_avoid() const;
+	std::vector<arma::cube> getCost_track() const;
+	std::vector<arma::cube> getCost_const() const;
+	*/
+
+	//void CCDPmap::initCostfunc(int y, int x, int num);
 
 	//ccdp.xs/ys -> (num-Áß¾Ó)/grid·Î ´ëÃ³
 	//ccdp.glen -> grid

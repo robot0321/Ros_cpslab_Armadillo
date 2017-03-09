@@ -26,14 +26,17 @@ int nvis = 20;
 float s[2];
 float phi = 2 * pi / ndir;
 float pS[3];
+arma::fmat pEst(2, H);
+std::vector<float> idxs_x;
+std::vector<float> idxs_y;
 arma::fmat s_dir(1, ndir);
 arma::fmat phi_a(Nside, 1);
 arma::fmat cc(Nside, 1);
 arma::fcube A(Nside, 2, ndir);
-std::vector<float> shiftdir;
+arma::mat shiftdir;
 std::vector<arma::mat> nextstate_sidxs;
-std::vector<arma::mat*> nextstate_dir;
-
+std::vector<arma::mat> nextstate_dir;
+CCDPmap* ptrCCDP;
 
 
 LARGE_INTEGER Frequency;
@@ -42,12 +45,20 @@ LARGE_INTEGER Endtime;
 
 arma::fmat pseq(2, 5);
 Gmap* ptrGmap = new Gmap();
+std::vector<arma::mat> Cost_visual;
+std::vector<arma::mat> Cost_avoid;
+std::vector<arma::cube> Cost_track;
+std::vector<arma::cube> Cost_const; // avoid + const
+
 
 void funf(int a);
-double normCDF(double value)
-{
-	return 0.5 * erfc(-value);
-}
+double normCDF(double value);
+arma::mat unique_rows(arma::mat A);
+void setCost_visual(int y, int x);
+void setCost_avoid(int y, int x);
+void setCost_track(int y, int x, int num);
+void setCost_const(int y, int x, int num);
+void initCostfunc(int y, int x, int num, float grid);
 
 
 int main()
@@ -80,18 +91,27 @@ int main()
 		A.slice(i).col(0) = cos(phi_a.col(0) + s_dir(i));
 		A.slice(i).col(1) = sin(phi_a.col(0) + s_dir(i));
 	}
-	//arma::unique(arma::round(arma::linspace(Urng[0], Urng[1], 20)/2/pi*ndir));
-	//arma::mat kron_tmp1(arma::linspace<arma::rowvec>(0, 1, 20), arma::linspace<arma::rowvec>(0, 1, 20));
+
+	shiftdir = arma::unique(arma::round(arma::linspace(Urng[0], Urng[1], 20)/2/pi*ndir));
+	arma::mat kron_tmp1(2, 20);
+	kron_tmp1.row(0) = arma::linspace<arma::rowvec>(0, 1, 20);
+	kron_tmp1.row(1) = arma::linspace<arma::rowvec>(1, 0, 20);
 	arma::mat kron_tmp2(2, 1);
 
 	for (int i=0; i < ndir; i++) {
-		kron_tmp2(0) = cos(s_dir(i));
-		kron_tmp2(1) = sin(s_dir(i));
+		kron_tmp2(0) = sin(s_dir(i));
+		kron_tmp2(1) = cos(s_dir(i));
 		
-		//arma::mat asdf = arma::unique(arma::round(arma::kron(Vrng*kron_tmp1, kron_tmp2)));
-		//nextstate_sidxs.push_back(asdf);
-		//std::cout << nextstate_sidxs[i] << std::endl;
-		
+		nextstate_sidxs.push_back(unique_rows(arma::trans(arma::round(arma::kron(Vrng*kron_tmp1, kron_tmp2)))));
+		arma::mat shiftdir_buffer(shiftdir);
+		for (int j = 0; j < shiftdir.size(); j++){
+			shiftdir_buffer(j) = (int(shiftdir(j)) + i + ndir) % ndir;
+			if (shiftdir_buffer(j) == 0) shiftdir_buffer(j) = ndir;
+		}
+		nextstate_dir.push_back(shiftdir_buffer);
+		//std::cout << (shiftdir + i) << std::endl;
+		//std::cout << (arma::mat(shiftdir).fill(ndir)) << std::endl;
+		//std::cout << nextstate_dir[i] << std::endl;
 	}
 	
 
@@ -101,7 +121,7 @@ int main()
 	system("PAUSE");
 	std::cout << pseq(1,0) << std::endl;
 
-	//ptrGmap->printGlobalmap();
+	ptrGmap->printGlobalmap();
 
 	system("PAUSE");
 	for (int timestamps = 0; timestamps < pseq.n_cols-H; timestamps++) {
@@ -120,22 +140,25 @@ int main()
 
 void funf(int timestamps) {
 	float pT_est[2] = { pseq(0,timestamps), pseq(1,timestamps) };
-	arma::fmat pEst(2,H);
+
 	for (int i = 0; i < H; i++) {
 		pEst.col(i) = pseq.col(timestamps+i+1);
 	}	
 	std::cout << "pEst " << pEst << std::endl;
-	std::vector<float> idxs_x = { std::fmin(arma::min(pEst.row(0)), pS[0] - Vrng[1] * T), std::fmax(arma::max(pEst.row(0)), pS[0] + Vrng[1] * T) };
-	std::vector<float> idxs_y = { std::fmin(arma::min(pEst.row(1)), pS[1] - Vrng[1] * T), std::fmax(arma::max(pEst.row(1)), pS[1] + Vrng[1] * T) };
+	idxs_x = { std::fmin(arma::min(pEst.row(0)), pS[0] - Vrng[1] * T), std::fmax(arma::max(pEst.row(0)), pS[0] + Vrng[1] * T) };
+	idxs_y = { std::fmin(arma::min(pEst.row(1)), pS[1] - Vrng[1] * T), std::fmax(arma::max(pEst.row(1)), pS[1] + Vrng[1] * T) };
 
 	float rlen = idxs_y.at(1) - idxs_y.at(0);
 	float clen = idxs_x.at(1) - idxs_x.at(0);
+	std::cout << "idxs_y: " << idxs_y[0] << " / " << idxs_y[1] << std::endl;
+	std::cout << "idxs_x: " << idxs_x[0] << " / " << idxs_x[1] << std::endl;
 
-	CCDPmap* ptrCCDP = new CCDPmap(ptrGmap, idxs_x, idxs_y, rlen, clen, H, 0.3);
+	ptrCCDP = new CCDPmap(ptrGmap, idxs_x, idxs_y, 0.3);
 	
 	ptrCCDP->printLocalmap();
-	//ptrCCDP->grid_resize(2);
-	//ptrCCDP->printLocalmap();
+	
+	initCostfunc(rlen, clen, H, ptrCCDP->getGrid());
+	
 
 
 
@@ -144,4 +167,81 @@ void funf(int timestamps) {
 
 	delete ptrCCDP;
 
+	system("PAUSE");
+
+}
+
+double normCDF(double value)
+{
+	return 0.5 * erfc(-value);
+}
+
+arma::mat unique_rows(arma::mat A) {
+	std::vector<arma::mat> list_of_mat;
+	int listchk = 1;
+	list_of_mat.push_back(A.row(0));
+	for (int j = 0; j < A.n_rows; j++) {
+		for (int i = 0; i < list_of_mat.size(); i++) {
+			if ((A.row(j))(0) == list_of_mat[i].at(0) && (A.row(j))(1) == list_of_mat[i].at(1)) {
+				listchk = 0;
+				break;
+			}
+		}
+		if (listchk == 1) {
+			list_of_mat.push_back(A.row(j));
+		}
+		listchk = 1;
+	}
+	arma::mat Ret(list_of_mat.size(), 2);
+	for (int i = 0; i < list_of_mat.size(); i++) {
+		Ret.row(i) = list_of_mat[i];
+	}
+
+	return Ret;
+}
+
+
+void setCost_visual(int y, int x) {
+
+
+}
+void setCost_avoid(int y, int x) {
+
+}
+void setCost_track(int y, int x, int num) {
+
+}
+void setCost_const(int y, int x, int num) {
+
+}
+
+
+void initCostfunc(int y, int x, int num, float grid) {
+	arma::mat local = ptrCCDP->getLocalmap();
+	for (int i = 0; i < H + 1; i++) {
+		
+		Cost_visual.push_back(local.zeros());
+		Cost_avoid.push_back(local.zeros());
+		Cost_track.push_back(arma::cube(local.n_rows, local.n_cols, ndir));
+		Cost_const.push_back(arma::cube(local.n_rows, local.n_cols, ndir));
+	}
+	arma::mat dist2target(local);
+	for (int tt = 0; tt < H; tt++) {
+		for (int i = 0; i < dist2target.n_rows; i++) {
+			for (int j = 0; j < dist2target.n_cols; j++) {
+				dist2target(i, j) = pow(pEst(0, tt) - (ptrCCDP->getGrid()*j + idxs_x[0]), 2) + pow(pEst(1, tt) - (ptrCCDP->getGrid()*i + idxs_y[0]), 2);
+			}
+		}
+		std::cout << dist2target << std::endl;
+
+
+
+
+
+
+
+
+
+
+	}
 }
