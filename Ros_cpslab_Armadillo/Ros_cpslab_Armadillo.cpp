@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cmath>
 #include "CCDPmap.h"
+#include <iomanip>
+
 
 #define pi 3.141592
 
@@ -29,10 +31,10 @@ float pS[3];
 arma::fmat pEst(2, H);
 std::vector<float> idxs_x;
 std::vector<float> idxs_y;
-arma::fmat s_dir(1, ndir);
-arma::fmat phi_a(Nside, 1);
-arma::fmat cc(Nside, 1);
-arma::fcube A(Nside, 2, ndir);
+arma::mat s_dir(1, ndir);
+arma::mat phi_a(Nside, 1);
+arma::mat cc(Nside, 1);
+arma::cube A(Nside, 2, ndir);
 arma::mat shiftdir;
 std::vector<arma::mat> nextstate_sidxs;
 std::vector<arma::mat> nextstate_dir;
@@ -63,6 +65,7 @@ void initCostfunc(int y, int x, int num, float grid);
 
 int main()
 {
+	
 	pseq << 1 << 1 << 1 << 1 << 1 << 4 << 6 << arma::endr
 		<< 0 << 1 << 2 << 3 << 4 << 4 << 6 << arma::endr;
 	int ttmp = 1;
@@ -122,6 +125,7 @@ int main()
 	std::cout << pseq(1,0) << std::endl;
 
 	ptrGmap->printGlobalmap();
+	//std::cout << std::fixed << std::setprecision(3) << std::setfill('0');
 
 	system("PAUSE");
 	for (int timestamps = 0; timestamps < pseq.n_cols-H; timestamps++) {
@@ -145,17 +149,17 @@ void funf(int timestamps) {
 		pEst.col(i) = pseq.col(timestamps+i+1);
 	}	
 	std::cout << "pEst " << pEst << std::endl;
-	idxs_x = { std::fmin(arma::min(pEst.row(0)), pS[0] - Vrng[1] * T), std::fmax(arma::max(pEst.row(0)), pS[0] + Vrng[1] * T) };
-	idxs_y = { std::fmin(arma::min(pEst.row(1)), pS[1] - Vrng[1] * T), std::fmax(arma::max(pEst.row(1)), pS[1] + Vrng[1] * T) };
+	idxs_x = { std::max(std::min(arma::min(pEst.row(0)), pS[0] - Vrng[1] * T), ptrGmap->getXrng().at(0)), std::min(std::max(arma::max(pEst.row(0)), pS[0] + Vrng[1] * T), ptrGmap->getXrng().at(1)) };
+	idxs_y = { std::max(std::min(arma::min(pEst.row(1)), pS[1] - Vrng[1] * T), ptrGmap->getYrng().at(0)), std::min(std::max(arma::max(pEst.row(1)), pS[1] + Vrng[1] * T), ptrGmap->getYrng().at(1)) };
 
-	float rlen = idxs_y.at(1) - idxs_y.at(0);
-	float clen = idxs_x.at(1) - idxs_x.at(0);
+	float rlen = idxs_y[1] - idxs_y[0];
+	float clen = idxs_x[1] - idxs_x[0];
 	std::cout << "idxs_y: " << idxs_y[0] << " / " << idxs_y[1] << std::endl;
 	std::cout << "idxs_x: " << idxs_x[0] << " / " << idxs_x[1] << std::endl;
 
 	ptrCCDP = new CCDPmap(ptrGmap, idxs_x, idxs_y, 0.3);
 	
-	ptrCCDP->printLocalmap();
+	//ptrCCDP->printLocalmap();
 	
 	initCostfunc(rlen, clen, H, ptrCCDP->getGrid());
 	
@@ -219,14 +223,20 @@ void setCost_const(int y, int x, int num) {
 void initCostfunc(int y, int x, int num, float grid) {
 	arma::mat local = ptrCCDP->getLocalmap();
 	for (int i = 0; i < H + 1; i++) {
-		
-		Cost_visual.push_back(local.zeros());
-		Cost_avoid.push_back(local.zeros());
+		Cost_visual.push_back(arma::mat(local).zeros());
+		Cost_avoid.push_back(arma::mat(local).zeros());
 		Cost_track.push_back(arma::cube(local.n_rows, local.n_cols, ndir));
 		Cost_const.push_back(arma::cube(local.n_rows, local.n_cols, ndir));
 	}
 	arma::mat dist2target(local);
+	arma::mat angle2target(local);
+	arma::mat minradius = arma::mat(1, nvis).zeros();
+	arma::mat cvistmp(local);
+
+	arma::mat tmp(local);
+
 	for (int tt = 0; tt < H; tt++) {
+		/****************************** [ Cvis ] *******************************/
 		for (int i = 0; i < dist2target.n_rows; i++) {
 			for (int j = 0; j < dist2target.n_cols; j++) {
 				dist2target(i, j) = pow(pEst(0, tt) - (ptrCCDP->getGrid()*j + idxs_x[0]), 2) + pow(pEst(1, tt) - (ptrCCDP->getGrid()*i + idxs_y[0]), 2);
@@ -234,14 +244,69 @@ void initCostfunc(int y, int x, int num, float grid) {
 		}
 		std::cout << dist2target << std::endl;
 
+		for (int i = 0; i < dist2target.n_rows; i++) {
+			for (int j = 0; j < dist2target.n_cols; j++) {
+				angle2target(i, j) = round((std::atan2(pEst(1, tt) - (ptrCCDP->getGrid()*i + idxs_y[0]), pEst(0, tt) - (ptrCCDP->getGrid()*j + idxs_x[0]))+pi)/2/pi*nvis)+1;
+				if (angle2target(i, j) == nvis + 1) angle2target(i,j) = 1;
+			}
+		}
+		
+		std::cout << angle2target << std::endl;
+		int* obsidx = new int[local.n_cols * local.n_rows];
+		for (int ii = 0; ii < nvis; ii++) {
+			float dist_buff = pow(ptrGmap->getXrng().at(1) - ptrGmap->getXrng().at(0), 2) + pow(ptrGmap->getYrng().at(1) - ptrGmap->getYrng().at(0), 2);
+			std::cout << "dist_buff " << ii << " : ";
+			int sum_obsidx = 0;
+			for (int j = 0; j < local.n_rows*local.n_cols; j++) {
+				obsidx[j] = (local(j) == 1 & angle2target(j) == ii);
+				tmp(j) = obsidx[j];
+				sum_obsidx += obsidx[j];
+				if (obsidx[j] == 1) {
+					dist_buff = std::fmin(dist2target(j), dist_buff);
+
+					std::cout << dist_buff << " ";
+				}
+			}
+			std::cout << std::endl;
+			std::cout << tmp << std::endl;
+
+			if (sum_obsidx > 0) {
+				minradius(ii) = dist_buff;
+				for (int j = 0; j < local.n_rows*local.n_cols; j++) {
+					cvistmp(j) = 1 * ( (dist2target(j) >= minradius(ii)) & (angle2target(j)==ii) );
+				}
+			}
+			std::cout << std::endl;
+		}
+		delete obsidx;
+		Cost_visual[tt+1] = cvistmp;
+		//std::cout << "tt: " << tt << " / Cvis : " << std::endl;
+		//std::cout << cvistmp << std::endl;
 
 
+		
+		/****************************** [ Ctrack ] *******************************
+
+		for (int ii = 0; ii < ndir; ii++) {
+			arma::uvec slice = arma::linspace<arma::uvec>(1, ndir, ndir);
+			Cost_track[tt + 1].each_slice(slice) = 
 
 
+			ccdp.ctrack(tt + 1).val(:, : , ii) = reshape(sum(1 - normcdf(bsxfun(@plus,A(:, : , ii)*[ccdp.xs(:) - pEst(tt).mean(1), ccdp.ys(:) - pEst(tt).mean(2)]',cc)/pEst(tt).sig),1) > threshold_track,[rlen,clen]);% matrix of normal vectors of sensing region
+			Cost_track[tt+1]
+		}
+		
+
+		/****************************** [ Cavoid ] *******************************
+		int Rfree = 2; % probability of collision is determined by Rfree
+		ccdp.cavoid(:, : , tt + 1) = conv2(double(ccdp.gmap), ones(Rfree * 2 + 1), 'same') >= 1;
+
+		/****************************** [ Cconst ] *******************************
+		ccdp.cconst(tt + 1).val = bsxfun(@or,ccdp.ctrack(tt + 1).val, ccdp.cavoid(:, : , tt + 1));
+		
 
 
-
-
-
+		*/
+		
 	}
 }
