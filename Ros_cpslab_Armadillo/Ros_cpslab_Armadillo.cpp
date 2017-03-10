@@ -23,6 +23,7 @@ arma::fmat Urng(1, 2);
 arma::fmat Vrng(1, 2); 
 const int H = 3; // horizon
 const int T = 1;
+const float threshold = 0.3;
 int ndir = 10;
 int nvis = 20;
 float s[2];
@@ -89,11 +90,16 @@ int main()
 		else if (i == 1) { phi_a(1) = (-ThetaS / 2 - pi / 2); cc(i) = 0; }
 		else { phi_a(i) = ((ThetaS*(2 * i + 2) - 3 - Nside) / (2 * (Nside - 2))); cc(i) = Rs*cos(ThetaS / 2 / (Nside - 2)); }
 	}
-	
+	//std::cout << "A slice 0" << std::endl;
+	//std::cout << cos(phi_a.col(0) + s_dir(0)) << std::endl;
+	//std::cout << sin(phi_a.col(0) + s_dir(0)) << std::endl;
+
+
 	for (int i = 0; i < ndir; i++) {
 		A.slice(i).col(0) = cos(phi_a.col(0) + s_dir(i));
 		A.slice(i).col(1) = sin(phi_a.col(0) + s_dir(i));
 	}
+	//std::cout << A << std::endl;
 
 	shiftdir = arma::unique(arma::round(arma::linspace(Urng[0], Urng[1], 20)/2/pi*ndir));
 	arma::mat kron_tmp1(2, 20);
@@ -116,9 +122,6 @@ int main()
 		//std::cout << (arma::mat(shiftdir).fill(ndir)) << std::endl;
 		//std::cout << nextstate_dir[i] << std::endl;
 	}
-	
-
-
 
 	QueryPerformanceFrequency(&Frequency);
 	system("PAUSE");
@@ -242,7 +245,7 @@ void initCostfunc(int y, int x, int num, float grid) {
 				dist2target(i, j) = pow(pEst(0, tt) - (ptrCCDP->getGrid()*j + idxs_x[0]), 2) + pow(pEst(1, tt) - (ptrCCDP->getGrid()*i + idxs_y[0]), 2);
 			}
 		}
-		std::cout << dist2target << std::endl;
+		//std::cout << dist2target << std::endl;
 
 		for (int i = 0; i < dist2target.n_rows; i++) {
 			for (int j = 0; j < dist2target.n_cols; j++) {
@@ -251,11 +254,11 @@ void initCostfunc(int y, int x, int num, float grid) {
 			}
 		}
 		
-		std::cout << angle2target << std::endl;
+		//std::cout << angle2target << std::endl;
 		int* obsidx = new int[local.n_cols * local.n_rows];
 		for (int ii = 0; ii < nvis; ii++) {
 			float dist_buff = pow(ptrGmap->getXrng().at(1) - ptrGmap->getXrng().at(0), 2) + pow(ptrGmap->getYrng().at(1) - ptrGmap->getYrng().at(0), 2);
-			std::cout << "dist_buff " << ii << " : ";
+			//std::cout << "dist_buff " << ii << " : ";
 			int sum_obsidx = 0;
 			for (int j = 0; j < local.n_rows*local.n_cols; j++) {
 				obsidx[j] = (local(j) == 1 & angle2target(j) == ii);
@@ -264,11 +267,11 @@ void initCostfunc(int y, int x, int num, float grid) {
 				if (obsidx[j] == 1) {
 					dist_buff = std::fmin(dist2target(j), dist_buff);
 
-					std::cout << dist_buff << " ";
+					//std::cout << dist_buff << " ";
 				}
 			}
-			std::cout << std::endl;
-			std::cout << tmp << std::endl;
+			//std::cout << std::endl;
+			//std::cout << tmp << std::endl;
 
 			if (sum_obsidx > 0) {
 				minradius(ii) = dist_buff;
@@ -276,7 +279,7 @@ void initCostfunc(int y, int x, int num, float grid) {
 					cvistmp(j) = 1 * ( (dist2target(j) >= minradius(ii)) & (angle2target(j)==ii) );
 				}
 			}
-			std::cout << std::endl;
+			//std::cout << std::endl;
 		}
 		delete obsidx;
 		Cost_visual[tt+1] = cvistmp;
@@ -285,15 +288,54 @@ void initCostfunc(int y, int x, int num, float grid) {
 
 
 		
-		/****************************** [ Ctrack ] *******************************
+		/****************************** [ Ctrack ] *******************************/
+		arma::mat aass(2, local.n_cols*local.n_rows);
 
 		for (int ii = 0; ii < ndir; ii++) {
-			arma::uvec slice = arma::linspace<arma::uvec>(1, ndir, ndir);
-			Cost_track[tt + 1].each_slice(slice) = 
+			for (int i = 0; i < local.n_rows; i++) {
+				for (int j = 0; j < local.n_cols; j++) {
+					aass(0, local.n_cols*i + j) = (ptrCCDP->getGrid()*j + idxs_x[0]) - pEst(0, tt);
+					aass(1, local.n_cols*i + j) = (ptrCCDP->getGrid()*j + idxs_y[0]) - pEst(1, tt);
+				}
+			}
+			std::cout << "aass" << std::endl;
+			std::cout << aass << std::endl;
+			std::cout << "cc" << std::endl;
+			std::cout << cc << std::endl;
 
+			aass = A.slice(ii) * aass;
+			std::cout << "A.slice * aass" << std::endl;
+			std::cout << aass << std::endl;
+			
+			for (int i = 0; i < aass.n_cols; i++) {
+				aass.col(i) += cc;
+			}
 
-			ccdp.ctrack(tt + 1).val(:, : , ii) = reshape(sum(1 - normcdf(bsxfun(@plus,A(:, : , ii)*[ccdp.xs(:) - pEst(tt).mean(1), ccdp.ys(:) - pEst(tt).mean(2)]',cc)/pEst(tt).sig),1) > threshold_track,[rlen,clen]);% matrix of normal vectors of sensing region
-			Cost_track[tt+1]
+			std::cout << "+cc" << std::endl;
+			std::cout << aass << std::endl;
+			for (int i = 0; i < aass.n_rows; i++) {
+				for (int j = 0; j < aass.n_cols; j++) {
+					aass(i, j) = 1 - normCDF(aass(i, j));
+				}
+			}
+			arma::mat b(aass.n_rows, aass.n_cols);
+
+			std::cout << "cdf" << std::endl;
+			std::cout << aass << std::endl;
+			aass = arma::sum(aass, 0);
+			std::cout << "sum" << std::endl;
+			std::cout << aass << std::endl;
+			for (int i = 0; i < aass.n_rows; i++) {
+				for (int j = 0; j < aass.n_cols; j++) {
+					b(i,j) = (aass(i,j) > 1);
+				}
+			}
+			b.set_size(local.n_rows, local.n_cols);
+			std::cout << "b" << std::endl;
+			std::cout << b << std::endl;
+
+			Cost_track[tt + 1].slice(ii) = b;
+
 		}
 		
 
@@ -304,9 +346,9 @@ void initCostfunc(int y, int x, int num, float grid) {
 		/****************************** [ Cconst ] *******************************
 		ccdp.cconst(tt + 1).val = bsxfun(@or,ccdp.ctrack(tt + 1).val, ccdp.cavoid(:, : , tt + 1));
 		
-
-
 		*/
+
+		
 		
 	}
 }
