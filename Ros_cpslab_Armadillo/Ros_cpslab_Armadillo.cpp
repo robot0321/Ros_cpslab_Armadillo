@@ -29,6 +29,8 @@ int nvis = 20;
 float s[2];
 float phi = 2 * pi / ndir;
 float pS[3];
+float Rfree = 0.5;
+
 arma::fmat pEst(2, H);
 std::vector<float> idxs_x;
 std::vector<float> idxs_y;
@@ -180,7 +182,7 @@ void funf(int timestamps) {
 
 double normCDF(double value)
 {
-	return 0.5 * erfc(-value);
+	return 0.5 * erfc(-value/sqrt(2));
 }
 
 arma::mat unique_rows(arma::mat A) {
@@ -298,57 +300,65 @@ void initCostfunc(int y, int x, int num, float grid) {
 					aass(1, local.n_cols*i + j) = (ptrCCDP->getGrid()*j + idxs_y[0]) - pEst(1, tt);
 				}
 			}
-			std::cout << "aass" << std::endl;
-			std::cout << aass << std::endl;
-			std::cout << "cc" << std::endl;
-			std::cout << cc << std::endl;
+			//std::cout << "aass" << std::endl;
+			//std::cout << aass << std::endl;
+			//std::cout << "cc" << std::endl;
+			//std::cout << cc << std::endl;
 
-			aass = A.slice(ii) * aass;
-			std::cout << "A.slice * aass" << std::endl;
-			std::cout << aass << std::endl;
+			arma::mat bbss = A.slice(ii) * aass;
+			//std::cout << "A.slice * aass" << std::endl;
+			//std::cout << bbss << std::endl;
 			
-			for (int i = 0; i < aass.n_cols; i++) {
-				aass.col(i) += cc;
+			for (int i = 0; i < bbss.n_cols; i++) {
+				bbss.col(i) += cc;
 			}
 
-			std::cout << "+cc" << std::endl;
-			std::cout << aass << std::endl;
-			for (int i = 0; i < aass.n_rows; i++) {
-				for (int j = 0; j < aass.n_cols; j++) {
-					aass(i, j) = 1 - normCDF(aass(i, j));
+			//std::cout << "+cc" << std::endl;
+			//std::cout << bbss << std::endl;
+			for (int i = 0; i < bbss.n_rows; i++) {
+				for (int j = 0; j < bbss.n_cols; j++) {
+					bbss(i, j) = 1 - normCDF(bbss(i, j));
 				}
 			}
-			arma::mat b(aass.n_rows, aass.n_cols);
+			arma::mat b(local.n_rows, local.n_cols);
 
-			std::cout << "cdf" << std::endl;
-			std::cout << aass << std::endl;
-			aass = arma::sum(aass, 0);
-			std::cout << "sum" << std::endl;
-			std::cout << aass << std::endl;
-			for (int i = 0; i < aass.n_rows; i++) {
-				for (int j = 0; j < aass.n_cols; j++) {
-					b(i,j) = (aass(i,j) > 1);
+			//std::cout << "normcdf 1" << std::endl;
+			//std::cout << normCDF(1) << std::endl;
+
+			//std::cout << "cdf" << std::endl;
+			//std::cout << bbss << std::endl;
+			bbss = arma::sum(bbss, 0);
+			//std::cout << "sum" << std::endl;
+			//std::cout << bbss << std::endl;
+			for (int i = 0; i < bbss.n_rows; i++) {
+				for (int j = 0; j < bbss.n_cols; j++) {
+					b(bbss.n_cols*i + j) = (bbss(i, j));// > threshold);
 				}
 			}
-			b.set_size(local.n_rows, local.n_cols);
-			std::cout << "b" << std::endl;
-			std::cout << b << std::endl;
+			//b.set_size(local.n_rows, local.n_cols);
+			//std::cout << "b" << std::endl;
+			//std::cout << b << std::endl;
 
 			Cost_track[tt + 1].slice(ii) = b;
 
 		}
-		
+		std::cout << "tt+1: " << tt+1 << std::endl;
+		std::cout << Cost_track[tt+1] << std::endl;
 
-		/****************************** [ Cavoid ] *******************************
-		int Rfree = 2; % probability of collision is determined by Rfree
-		ccdp.cavoid(:, : , tt + 1) = conv2(double(ccdp.gmap), ones(Rfree * 2 + 1), 'same') >= 1;
+
+
+		arma::mat a = arma::mat().ones(int(Rfree * 2 + 1));
+		//std::cout << "ones: " << std::endl;
+		//std::cout << a << std::endl;
+
+		/****************************** [ Cavoid ] *******************************/
+		//Cost_avoid[tt+1] = arma::conv2(local, arma::mat().ones(int(Rfree * 2 + 1)), 'same') >= 1;
 
 		/****************************** [ Cconst ] *******************************
 		ccdp.cconst(tt + 1).val = bsxfun(@or,ccdp.ctrack(tt + 1).val, ccdp.cavoid(:, : , tt + 1));
 		
 		*/
-
-		
-		
+	
 	}
+	
 }
