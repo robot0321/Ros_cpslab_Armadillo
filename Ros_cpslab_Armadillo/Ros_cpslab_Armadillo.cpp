@@ -13,7 +13,7 @@
 #define pi 3.141592
 
 
-float Rs = 7; 
+float Rs = 5; 
 float ThetaS = 57.0 / 180.0 * pi;
 float sensor_model[2] = { Rs, ThetaS };
 int Nside = 4;
@@ -23,14 +23,19 @@ arma::fmat Urng(1, 2);
 arma::fmat Vrng(1, 2); 
 const int H = 3; // horizon
 const int T = 1;
-const float threshold = 0.3;
+const float threshold = 0.5;
 int ndir = 10;
 int nvis = 20;
 float s[2];
 float phi = 2 * pi / ndir;
 float pS[3];
 float Rfree = 1;
+float lagcoeff = 0;
+std::vector<float> lagrng = { 0.0, 1.0 };
+float lag_feas = 1;
+std::vector<float> Optctrl;
 arma::mat mat_conv2 = arma::mat().ones(int(Rfree * 2 + 1), int(Rfree * 2 + 1));
+
 
 arma::fmat pEst(2, H);
 std::vector<float> idxs_x;
@@ -66,10 +71,15 @@ void setCost_track(int y, int x, int num);
 void setCost_const(int y, int x, int num);
 void initCostfunc(int y, int x, int num, float grid);
 
-void myPrint(const arma::mat M) {
-	for (int i = 0; i < M.n_rows; i++) {
+void myPrint(const arma::mat M, bool obj=true) {
+	for (int i = M.n_rows-1; i >= 0; i--) {
 		for (int j = 0; j < M.n_cols; j++) {
-			printf("%1.0f ", M(i, j)); // = pow(pEst(0, tt) - (ptrCCDP->getGrid()*j + idxs_x[0]), 2) + pow(pEst(1, tt) - (ptrCCDP->getGrid()*i + idxs_y[0]), 2);
+			if (obj && ptrCCDP->getLocalmap()(i, j) == 1) {
+				if (M(i, j) == 1) { printf(" * "); }
+				else { printf(" $ "); }
+			}else {
+				printf("%2.0f ", M(i, j)); // = pow(pEst(0, tt) - (ptrCCDP->getGrid()*j + idxs_x[0]), 2) + pow(pEst(1, tt) - (ptrCCDP->getGrid()*i + idxs_y[0]), 2);
+			}
 		}
 		printf("\n");
 	}
@@ -79,8 +89,11 @@ void myPrint(const arma::mat M) {
 
 
 int main()
-{
-	
+{	
+	double da = 0.0;
+	double db = 0.5;
+	double dc = 1.0;
+
 	pseq << 0 << -1 << -1 << -2 << -3 << -4 << -5 << -6 << -7 << -7 << -7 << -7 << -7 << -7 << -7 << -6 << -5 << -4 << -3 << -2 << -1 << 0 << arma::endr
 		 << 0 << 0  << 1  << 1  << 1  <<  1 << 1  <<  1 <<  1 <<  2 <<  3 <<  4 <<  5 <<  6 <<  7 <<  7 <<  7 <<  7 <<  7 <<  7 <<  7 << 7 << arma::endr;
 	int ttmp = 1;
@@ -259,6 +272,8 @@ void initCostfunc(int y, int x, int num, float grid) {
 				if (angle2target(i, j) == nvis + 1) angle2target(i,j) = 1;
 			}
 		}
+		//myPrint(angle2target, false);
+		//std::cout << angle2target << std::endl;
 		
 		int* obsidx = new int[local.n_cols * local.n_rows];
 		for (int ii = 0; ii < nvis; ii++) {
@@ -278,14 +293,15 @@ void initCostfunc(int y, int x, int num, float grid) {
 			if (sum_obsidx > 0) {
 				minradius(ii) = dist_buff;
 				for (int j = 0; j < local.n_rows*local.n_cols; j++) {
-					cvistmp(j) =  (dist2target(j) >= minradius(ii)) & (angle2target(j)==ii) | int(cvistmp(j));
+					cvistmp(j) =  (dist2target(j) >= minradius(ii)) & (angle2target(j)==ii) || int(cvistmp(j));
 				}
 			}
 			//std::cout << std::endl;
 		}
 		delete obsidx;
 		Cost_visual[tt+1] = cvistmp;
-		myPrint(Cost_visual[tt + 1]);
+
+		//myPrint(Cost_visual[tt + 1]);
 		//std::cout << "tt: " << tt << " / Cvis : " << std::endl;
 		//std::cout << cvistmp << std::endl;
 
@@ -293,6 +309,8 @@ void initCostfunc(int y, int x, int num, float grid) {
 		
 		/****************************** [ Ctrack ] *******************************/
 		arma::mat aass(2, local.n_cols*local.n_rows);
+		arma::mat track_tmp(local);
+		track_tmp.ones();
 
 		for (int ii = 0; ii < ndir; ii++) {
 			for (int i = 0; i < local.n_rows; i++) {
@@ -337,30 +355,152 @@ void initCostfunc(int y, int x, int num, float grid) {
 					b(bbss.n_cols*i + j) = (bbss(i, j) > threshold);
 				}
 			}
-			//b.set_size(local.n_rows, local.n_cols);
-			//std::cout << "b" << std::endl;
-			//std::cout << b << std::endl;
+			/*don't need cuz Cost_const
+			for (int i = 0; i < b.n_rows; i++) {
+				for (int j = 0; j < b.n_cols; j++) {
+					b(i, j) = int(b(i, j)) || int(ptrCCDP->getLocalmap()(i, j));
+				}
+			}
+			*/
 
 			Cost_track[tt + 1].slice(ii) = b;
 			//myPrint(b);
+			
+			/* don't need cuz Cost_const
+			for (int i = 0; i < b.n_rows; i++) {
+				for (int j = 0; j < b.n_cols; j++) {
+					track_tmp(i,j) = int(track_tmp(i,j)) & int(b(i, j));
+				}
+			}
+			*/
 
 		}
-		//std::cout << "tt+1: " << tt+1 << std::endl;
-		//std::cout << Cost_track[tt+1] << std::endl;
-		//::cout << std::endl;
+		//myPrint(track_tmp);		
 
-
-		
 
 		/****************************** [ Cavoid ] *******************************/
-		//Cost_avoid[tt+1] = arma::conv2<arma::mat,arma::mat>(local, mat_conv2, 'same') >= 1;
+		Cost_avoid[tt + 1] = arma::trunc(arma::conv2(local, mat_conv2, "same"));
+		//myPrint(Cost_avoid[tt + 1]);
 
-		/****************************** [ Cconst ] *******************************
-		ccdp.cconst(tt + 1).val = bsxfun(@or,ccdp.ctrack(tt + 1).val, ccdp.cavoid(:, : , tt + 1));
+
+		/****************************** [ Cconst ] *******************************/
+		for (int k = 0; k < ndir; k++) {
+			for (int i = 0; i < local.n_rows; i++) {
+				for (int j = 0; j < local.n_cols; j++) {
+					Cost_const[tt + 1](i, j, k) = int(Cost_track[tt + 1](i,j,k)) || int(Cost_avoid[tt + 1](i,j));
+				}
+			}
+		}
 		
+		/* Cost_Const print
+		for (int i = 0; i < ndir; i++) {
+			//myPrint(Cost_const[tt + 1].slice(i));
+			for (int j = 0; j < local.n_rows; j++) {
+				for (int k = 0; k < local.n_cols; k++) {
+					track_tmp(j,k) = track_tmp(j,k) && Cost_const[tt + 1].slice(i)(j,k);
+				}
+			}
+			
+		}
+		myPrint(track_tmp);
+		system("PAUSE");
 		*/
-	
+
 	}
-	
+
+	// -----[Backward recursion] ----- 
+	// find the optimal control when lambda is given
+
+
+
+	for (int ilagran = 0; ilagran < 100; ilagran++) {
+		//initialize the optimal control : 'col' : current column + col,
+		// 'row' : current row + 'row', dirs : replace current dirs with dirs
+		Optctrl(1:H) = struct('row', zeros([size(idxs_x), ndir]), 'col', zeros([size(idxs_x), ndir]), 'dirs', 0 * ones([size(idxs_x), ndir]));
+		Jmin(1:H + 1) = struct('Jmin', 100 * ones([size(idxs_x), ndir]));
+		Jmin(H + 1).Jmin = bsxfun(@plus, lagcoeff*ccdp.cconst(H + 1).val, lag_feas*ccdp.cvis(:, : , H + 1)); %Value: Cvis + lambda * Ctrack
+			for tt = H : -1 : 1
+				% lagrangian - onestep
+				Lk = bsxfun(@plus, lagcoeff*ccdp.cconst(tt).val, lag_feas*ccdp.cvis(:, : , tt)); %Value: Cvis + lambda * Ctrack
+				for ii = 1 : ndir
+					[Jmin_dir, mindiridx] = min(Jmin(tt + 1).Jmin(:, : , ccdp.nextstate(ii).dir), [], 3);
+		mindiridx = ccdp.nextstate(ii).dir(mindiridx);
+
+
+
+		% find the optimal control - onestep
+			for jj = 1:size(ccdp.nextstate(ii).sidxs, 1)
+				original_rng_r = max(1, 1 - ccdp.nextstate(ii).sidxs(jj, 1)) : min(rlen, rlen - ccdp.nextstate(ii).sidxs(jj, 1));
+		original_rng_c = max(1, 1 - ccdp.nextstate(ii).sidxs(jj, 2)) :min(clen, clen - ccdp.nextstate(ii).sidxs(jj, 2));
+		comp_rng_r = max(1, 1 + ccdp.nextstate(ii).sidxs(jj, 1)) :min(rlen, rlen + ccdp.nextstate(ii).sidxs(jj, 1));
+		comp_rng_c = max(1, 1 + ccdp.nextstate(ii).sidxs(jj, 2)) :min(clen, clen + ccdp.nextstate(ii).sidxs(jj, 2));
+
+		% compare two matrix
+			CompMat = (Jmin(tt).Jmin(original_rng_r, original_rng_c, ii) > Jmin_dir(comp_rng_r, comp_rng_c)) | ...
+			(Jmin(tt).Jmin(original_rng_r, original_rng_c, ii) == Jmin_dir(comp_rng_r, comp_rng_c) & abs(Optctrl(tt).dirs(original_rng_r, original_rng_c, ii)) > abs(mindiridx(comp_rng_r, comp_rng_c)));
+		% update Jmin
+			Jmin(tt).Jmin(original_rng_r, original_rng_c, ii) = (1 - CompMat).*Jmin(tt).Jmin(original_rng_r, original_rng_c, ii) + CompMat.*Jmin_dir(comp_rng_r, comp_rng_c);
+
+		% update optimal control
+			Optctrl(tt).row(original_rng_r, original_rng_c, ii) = (~CompMat).*Optctrl(tt).row(original_rng_r, original_rng_c, ii) + CompMat.*ccdp.nextstate(ii).sidxs(jj, 1);
+		Optctrl(tt).col(original_rng_r, original_rng_c, ii) = (~CompMat).*Optctrl(tt).col(original_rng_r, original_rng_c, ii) + CompMat.*ccdp.nextstate(ii).sidxs(jj, 2);
+		Optctrl(tt).dirs(original_rng_r, original_rng_c, ii) = (~CompMat).*Optctrl(tt).dirs(original_rng_r, original_rng_c, ii) + CompMat.*mindiridx(comp_rng_r, comp_rng_c);
+
+		end
+			end
+			Jmin(tt).Jmin = Jmin(tt).Jmin + Lk;
+		end
+
+			% --[Find the optimal control] -- %
+			currs_idx = [round([s(2) - ccdp.ys(1), s(1) - ccdp.xs(1)] / ccdp.glen)'+1; mod(round(pS(3)/2/pi*ndir),ndir)+1];
+			%if (currs_idx(3) == 0)
+			% currs_idx(3) = ndir;
+		%end
+			const_val = 0; % number of violations of constraints
+			optidx = zeros(3, H);
+		for tt = 1:H
+			optidx(:, tt) = [Optctrl(tt).row(currs_idx(1, tt), currs_idx(2, tt), currs_idx(3, tt)), Optctrl(tt).col(currs_idx(1, tt), currs_idx(2, tt), currs_idx(3, tt)), Optctrl(tt).dirs(currs_idx(1, tt), currs_idx(2, tt), currs_idx(3, tt))]';
+			currs_idx(1:2, tt + 1) = currs_idx(1:2, tt) + optidx(1:2, tt);
+		currs_idx(3, tt + 1) = optidx(3, tt);
+		const_val = const_val + ccdp.cconst(tt + 1).val(currs_idx(1, tt + 1), currs_idx(2, tt + 1), currs_idx(3, tt + 1));
+		end
+			predict_s = [(currs_idx(2, :) - 1)*ccdp.glen + ccdp.xs(1); (currs_idx(1, :) - 1)*ccdp.glen + ccdp.ys(1)];
+		predict_s(3, :) = (currs_idx(3, :) - 1) * 2 * pi / ndir;
+
+		% though we doesn't consider constraints, the optimal solution
+			% satisfies constraints
+			if (const_val <= 0 && ilagran == 1)
+				fprintf('feasible\n ');
+		break;
+		elseif(ilagran == 1)
+			lag_feas = 0; lagcoeff = 1;
+
+		end
+			% check feasibility
+			if (ilagran == 2 && const_val > 0)
+				fprintf('infeasible\n');
+		break;
+		elseif(ilagran == 2)
+			lagcoeff = lagrng(2);
+		lag_feas = 1;
+		end
+			if (ilagran > 2)
+				if (const_val > 0) % violate constraints
+					lagrng(1) = lagcoeff;
+				else
+					lagrng(2) = lagcoeff;
+		end
+			if (lagrng(2) - lagrng(1) < 1e-2)
+				break;  % stop iterations
+			else
+				lagcoeff = mean(lagrng);
+		end
+			end
+	}
+
+
+
+
+
 }
 
