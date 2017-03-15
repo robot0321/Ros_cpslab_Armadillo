@@ -21,10 +21,9 @@ private:
 	int H_step;
 	float threshold_track;
 	
-	
-
-
 	arma::mat local_map;
+
+
 	//arma::cube Cost_visual;
 	//arma::cube Cost_avoid;
 	//std::vector<arma::cube> Cost_track;
