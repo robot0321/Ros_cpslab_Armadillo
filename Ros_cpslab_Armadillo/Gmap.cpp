@@ -21,7 +21,7 @@ Gmap::~Gmap(){
 		list_object.clear();
 	}
 
-	delete global_map;
+	//delete global_map;
 }
 
 
@@ -63,18 +63,25 @@ std::vector<float> Gmap::getYrng() const {return y_rng;}
 
 
 void Gmap::set_global_map() {
-	num_yaxis = (y_rng[1] - y_rng[0]) / grid;
-	num_xaxis = (x_rng[1] - x_rng[0]) / grid;
+	num_yaxis = int((y_rng[1] - y_rng[0]) / grid);
+	num_xaxis = int((x_rng[1] - x_rng[0]) / grid);
 
-	global_map = new arma::fmat(num_yaxis,num_xaxis); //global_map[y][x]
+	global_map = arma::mat(num_yaxis,num_xaxis); //global_map[y][x]
 	for (int i = 0; i<num_yaxis; i++) {
 		for (int j = 0; j<num_xaxis; j++) {
-			global_map->at(i,j) = obj_collision(i*grid - y_len / 2.0, j*grid - x_len / 2.0);
+			global_map(num_yaxis-1-i,j) = obj_collision(i*grid - y_len / 2.0, j*grid - x_len / 2.0);
 		}
 	}
+	xaxis = arma::rowvec(num_xaxis);
+	yaxis = arma::rowvec(num_yaxis);
+	for (int i = 0; i < num_xaxis; i++) { xaxis(i) = x_rng[0] + grid * i; }
+	for (int i = 0; i < num_yaxis; i++) { yaxis(i) = y_rng[0] + grid * i; }
+
 }
 
-arma::fmat* Gmap::getGlobalmap() const{return global_map;}
+arma::mat Gmap::getGlobalmap() const{return global_map;}
+arma::rowvec Gmap::get_xaxis() {return xaxis;}
+arma::rowvec Gmap::get_yaxis() { return yaxis; }
 
 void Gmap::printGlobalmap() const {
 	std::cout << "********** Gmap **********" << std::endl;
@@ -87,7 +94,7 @@ void Gmap::printGlobalmap() const {
 				std::cout << "<";
 			}
 			else {
-				std::cout << global_map->at(num_yaxis - 1 - i, j);// << " ";
+				std::cout << global_map(i, j);// << " ";
 			}
 		}
 		std::cout << std::endl;

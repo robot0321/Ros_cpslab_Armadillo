@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+
+#define ARMA_USE_CXX11
 #include <armadillo>
 
 class Gmap {
@@ -13,7 +15,11 @@ private:
 	int num_yaxis;
 	int num_xaxis;
 	std::vector<std::vector<float>> list_object; //object: [x, y, xlen, ylen, degree]
-	arma::fmat* global_map;
+	arma::rowvec xaxis;
+	arma::rowvec yaxis;
+
+	
+	arma::mat global_map;
 
 public:
 	Gmap();
@@ -26,9 +32,11 @@ public:
 	float getGrid() const;
 	std::vector<float> getXrng() const;
 	std::vector<float> getYrng() const;
-
+	arma::rowvec get_xaxis();
+	arma::rowvec get_yaxis();
+	
 	void set_global_map();
-	arma::fmat* getGlobalmap() const;
+	arma::mat getGlobalmap() const;
 	void printGlobalmap() const;
 
 	void getObjects() const;
