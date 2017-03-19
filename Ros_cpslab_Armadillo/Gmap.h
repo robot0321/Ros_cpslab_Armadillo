@@ -23,10 +23,10 @@ private:
 
 public:
 	Gmap();
-	Gmap(int map_number);
+	Gmap(int map_number, bool object);
 	~Gmap();
 
-	void load_map(int num_map);
+	void load_map(int num_map, bool object);
 	int obj_collision(float y, float x);
 
 	float getGrid() const;

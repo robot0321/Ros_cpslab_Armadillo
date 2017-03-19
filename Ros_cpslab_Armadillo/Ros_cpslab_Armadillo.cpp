@@ -29,7 +29,7 @@ int ndir = 10;
 int nvis = 20;
 arma::vec pT_est;
 arma::vec s;
-float phi = 2 * pi / ndir * 3;
+float phi = 2 * pi / ndir;
 arma::vec pS(3);
 float grid;
 float Rfree;
@@ -51,8 +51,8 @@ arma::cube A(Nside, 2, ndir);
 arma::mat mat_idxs_x;
 arma::mat mat_idxs_y;
 arma::mat shiftdir;
-std::vector<arma::mat> nextstate_sidxs;
-std::vector<arma::mat> nextstate_dir;
+std::vector<arma::mat> nextstate_sidxs; // 2 x column vector
+std::vector<arma::mat> nextstate_dir; // column vector
 
 
 
@@ -61,7 +61,7 @@ LARGE_INTEGER BeginTime;
 LARGE_INTEGER Endtime;
 
 arma::mat pseq;
-Gmap* ptrGmap = new Gmap();
+Gmap* ptrGmap = new Gmap(1,true);
 std::vector<arma::mat> Cost_visual;
 std::vector<arma::mat> Cost_avoid;
 std::vector<arma::cube> Cost_track;
@@ -113,7 +113,7 @@ int main()
 	Urng << -pi/2.0 << pi/2.0;
 	Vrng << VMIN << VMAX_const;
 	
-	s << pseq(0, ttmp) - 1 << arma::endr
+	s << pseq(0, ttmp) + 1 << arma::endr
 	  << pseq(1, ttmp) - 1 << arma::endr;// -1, -1
 	phi = 2.0*pi/ndir*3;
 	pS << s(0) << arma::endr
@@ -152,13 +152,13 @@ int main()
 			shiftdir_buffer(j) = (int(shiftdir(j)) + i + ndir) % ndir -1;
 			if (shiftdir_buffer(j) == -1) shiftdir_buffer(j) = ndir -1;
 		}
-		nextstate_dir.push_back(shiftdir_buffer);
+		nextstate_dir.push_back(shiftdir_buffer); // column vector
 		//std::cout << nextstate_sidxs[i] << std::endl;
 		//std::cout << shiftdir_buffer << std::endl;
 	}
 
 	QueryPerformanceFrequency(&Frequency);
-	system("PAUSE");
+
 	//std::cout << pseq(1,0) << std::endl;
 
 	ptrGmap->printGlobalmap();
@@ -179,7 +179,7 @@ int main()
 		double duringtime = (double)elapsed / (double)Frequency.QuadPart;
 		std::cout << "timestamps: " << timestamps << " takes " << duringtime << " seconds." << std::endl;
 		std::cout << "********************************************************************************" << std::endl;
-		system("PAUSE");
+		//system("PAUSE");
 	}
     return 0;
 }
@@ -280,7 +280,7 @@ void initCostfunc(float grid) {
 		//std::cout << dist2target << std::endl;
 		angle2target = round((arma::atan2(ccdp_ys, ccdp_xs) + pi) / 2.0 / pi*nvis) + 1;
 		angle2target.elem(arma::find(angle2target == nvis + 1)).fill(1);
-		myPrint(angle2target, false);
+		//myPrint(angle2target, false);
 		//std::cout << angle2target << std::endl;
 
 		minradius.zeros();
@@ -301,15 +301,15 @@ void initCostfunc(float grid) {
 
 
 		/****************************** [ Ctrack ] *******************************/
-		arma::mat afterA(2, local.n_elem);
-		afterA.row(0) = arma::vectorise(ccdp_xs, 1);
-		afterA.row(1) = arma::vectorise(ccdp_ys, 1);
-		std::cout << afterA << std::endl; // ºˆ¡§«ÿæﬂµ  ¬Èπﬂ!
+		arma::mat afterA(local.n_elem, 2);
+		afterA.col(0) = arma::vectorise(ccdp_xs);
+		afterA.col(1) = arma::vectorise(ccdp_ys);
+		//std::cout << afterA << std::endl; // ºˆ¡§«ÿæﬂµ  ¬Èπﬂ!
 		arma::mat B;
 		arma::mat C(local);
 
 		for (int ii = 0; ii < ndir; ii++) {
-			B = (A.slice(ii)*afterA);
+			B = (A.slice(ii)*arma::trans(afterA));
 			B.each_col() += cc;		
 			C.zeros();
 			C.elem(arma::find(arma::sum(1 - 0.5 * erfc(B / (-sqrt(2))), 0)>threshold)).ones();
@@ -326,7 +326,7 @@ void initCostfunc(float grid) {
 
 		/**************************	*** [ Cconst ] *******************************/
 		Cost_const[tt+1] = Cost_track[tt+1].each_slice() + Cost_avoid[tt+1]; // ≥ÌπÆ¿∫ +, êæ∑¶¿∫ orø¨ªÍ
-		std::cout << Cost_const[tt+1] << std::endl;
+		//std::cout << Cost_const[tt+1] << std::endl;
 	}
 
 }
@@ -334,7 +334,7 @@ void initCostfunc(float grid) {
 
 void backRecursion(CCDPmap* ptr) {
 	arma::mat local = ptr->getLocalmap();
-	float grid = ptr->getGrid();
+	//float grid = ptr->getGrid();
 
 
 	// -----[Backward recursion] ----- 
@@ -348,7 +348,8 @@ void backRecursion(CCDPmap* ptr) {
 		Optctrl_col.push_back(arma::cube(local.n_rows, local.n_cols, ndir));
 		Optctrl_dirs.push_back(arma::cube(local.n_rows, local.n_cols, ndir));
 	}
-	for (int i = 0; i < H + 1; i++) { Jmin.push_back(arma::cube(local.n_rows, local.n_cols, ndir));}
+	for (int i = 0; i < H + 1; i++) { Jmin.push_back(arma::cube(local.n_rows, local.n_cols, ndir).fill(100));}
+
 	Lk = arma::cube(local.n_rows, local.n_cols, ndir);
 	Jmin_dir = arma::mat(local).fill(100);
 	mindiridx = arma::mat(local).fill(0);
@@ -358,19 +359,21 @@ void backRecursion(CCDPmap* ptr) {
 	lagrng = { 0.0, 1.0 };
 	lag_feas = 1;
 
-	for (int ilagran = 0; ilagran < 10; ilagran++) {
+	for (int ilagran = 0; ilagran < 100; ilagran++) {
+		arma::mat mat_lagcoeff = arma::mat(local.n_rows,local.n_cols).fill(lagcoeff);
 		for (int i = 0; i < H; i++) {
 			Optctrl_row[i].zeros();
 			Optctrl_col[i].zeros();
 			Optctrl_dirs[i].zeros();
 		}
 		for (int i = 0; i < H + 1; i++) { Jmin[i].fill(100); }
-		for (int i = 0; i < ndir; i++) {
-			Jmin[H + 1 - 1].slice(i) = lagcoeff*Cost_const[H + 1 - 1].slice(i) + lag_feas * Cost_visual[H + 1 - 1];
-		}
+		
+		//std::cout << "sdf" << std::endl;
+		Jmin[H + 1 - 1] = (Cost_const[H + 1 - 1].each_slice() % mat_lagcoeff).each_slice() + lag_feas * Cost_visual[H + 1 - 1];
+		//std::cout << Jmin[H] << std::endl;
 
 		for (int tt = H - 1; tt >= 0; tt--) {
-			for (int i = 0; i < ndir; i++) { Lk.slice(i) = lagcoeff*Cost_const[tt].slice(i) + lag_feas * Cost_visual[tt]; }
+			Lk = (Cost_const[tt].each_slice() % mat_lagcoeff).each_slice() + lag_feas * Cost_visual[tt];
 
 			for (int ii = 0; ii < ndir; ii++) {
 				Jmin_dir = arma::mat(local).fill(100);
@@ -386,30 +389,71 @@ void backRecursion(CCDPmap* ptr) {
 					}
 				}
 
+
+
 				for (int jj = 0; jj < nextstate_sidxs[ii].n_rows; jj++) {
 					std::vector<int> original_rng_r = { std::max(0,int(0 - nextstate_sidxs[ii](jj,0))), std::min(int(local.n_rows - 1), int(local.n_rows - 1 - nextstate_sidxs[ii](jj,0))) };
 					std::vector<int> original_rng_c = { std::max(0,int(0 - nextstate_sidxs[ii](jj,1))), std::min(int(local.n_cols - 1), int(local.n_cols - 1 - nextstate_sidxs[ii](jj,1))) };
 					std::vector<int> comp_rng_r = { std::max(0,int(0 + nextstate_sidxs[ii](jj,0))), std::min(int(local.n_rows - 1), int(local.n_rows - 1 + nextstate_sidxs[ii](jj,0))) };
 					std::vector<int> comp_rng_c = { std::max(0,int(0 + nextstate_sidxs[ii](jj,1))), std::min(int(local.n_cols - 1), int(local.n_cols - 1 + nextstate_sidxs[ii](jj,1))) };
+					//std::cout << original_rng_r[0] << original_rng_r[1] << std::endl;
+					//std::cout << original_rng_c[0] << original_rng_c[1] << std::endl;
+					//std::cout << comp_rng_r[0] << comp_rng_r[1] << std::endl;
+					//std::cout << comp_rng_c[0] << comp_rng_c[1] << std::endl;
 
 
+					//arma::urowvec vec_original_rng_r = arma::linspace<arma::urowvec>(original_rng_r[0], original_rng_r[1], original_rng_r[1] - original_rng_r[0] + 1);
+					//arma::urowvec vec_original_rng_c = arma::linspace<arma::urowvec>(original_rng_c[0], original_rng_c[1], original_rng_c[1] - original_rng_c[0] + 1);
+					//arma::urowvec vec_comp_rng_r = arma::linspace<arma::urowvec>(comp_rng_r[0], comp_rng_r[1], comp_rng_r[1] - comp_rng_r[0] + 1);
+					//arma::urowvec vec_comp_rng_c = arma::linspace<arma::urowvec>(comp_rng_c[0], comp_rng_c[1], comp_rng_c[1] - comp_rng_c[0] + 1);
+					//std::cout << vec_original_rng_r << std::endl;
 
-					arma::mat CompMat(original_rng_r[1] - original_rng_r[0], original_rng_c[1] - original_rng_c[0]);
-					for (int i = 0; i < CompMat.n_rows; i++) {
-						for (int j = 0; j < CompMat.n_cols; j++) {
-							CompMat(i, j) = (Jmin[tt](i + original_rng_r[0], j + original_rng_c[0], ii) > Jmin_dir(i + comp_rng_r[0], j + comp_rng_c[0])) || (Jmin[tt](i + original_rng_r[0], j + original_rng_c[0], ii) == Jmin_dir(i + comp_rng_r[0], j + comp_rng_c[0]) && abs(Optctrl_dirs[tt](i + original_rng_r[0], j + original_rng_c[0], ii)) > abs(mindiridx(i + comp_rng_r[0], j + comp_rng_c[0])));
-						}
-					}
+					arma::umat CompMat;
+					//arma::umat CompMat1;
+					//arma::umat AA;
+					//arma::umat A;
+					//arma::umat B;
+					//arma::umat C;
+					//AA = Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) >= Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+					//A = Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) > Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+					//B = Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) == Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+					//C = abs(Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) > abs(mindiridx.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1])));
+					CompMat = Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) > Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]) || (Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) == Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]) && abs(Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) > abs(mindiridx.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]))));
+					//std::cout << CompMat << std::endl;
+
+					/*
+					Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat % Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+					Optctrl_row[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Optctrl_row[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat * nextstate_sidxs[ii](jj, 0);
+					Optctrl_col[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Optctrl_col[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat * nextstate_sidxs[ii](jj, 1);
+					Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat % mindiridx.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+					*/
+
+
+					/*??*/
+
 					for (int i = 0; i < CompMat.n_rows; i++) {
 						for (int j = 0; j < CompMat.n_cols; j++) {
 							Jmin[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (1 - CompMat(i, j))*Jmin[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j)*Jmin_dir(i + comp_rng_r[0], j + comp_rng_c[0]);
-							Optctrl_row[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (!CompMat(i, j)) * Optctrl_row[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j) * nextstate_sidxs[ii](jj, 0);
-							Optctrl_col[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (!CompMat(i, j)) * Optctrl_col[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j) * nextstate_sidxs[ii](jj, 1);
-							Optctrl_dirs[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (!CompMat(i, j)) * Optctrl_dirs[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j) * mindiridx(i + comp_rng_r[0], j + comp_rng_c[0]);
+							Optctrl_row[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (1 - CompMat(i, j)) * Optctrl_row[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j) * nextstate_sidxs[ii](jj, 0);
+							Optctrl_col[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (1 - CompMat(i, j)) * Optctrl_col[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j) * nextstate_sidxs[ii](jj, 1);
+							Optctrl_dirs[tt](i + original_rng_r[0], j + original_rng_c[0], ii) = (1 - CompMat(i, j)) * Optctrl_dirs[tt](i + original_rng_r[0], j + original_rng_c[0], ii) + CompMat(i, j) * mindiridx(i + comp_rng_r[0], j + comp_rng_c[0]);
 						}
 					}
-					//std::cout << CompMat << std::endl;
 
+					Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat % Jmin_dir.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+					Optctrl_row[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Optctrl_row[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat % arma::mat(arma::size(CompMat)).fill(nextstate_sidxs[ii](jj, 0));
+					Optctrl_col[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Optctrl_col[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat % arma::mat(arma::size(CompMat)).fill(nextstate_sidxs[ii](jj, 1));
+					Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) = (1 - CompMat) % Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) + CompMat % mindiridx.submat(comp_rng_r[0], comp_rng_c[0], comp_rng_r[1], comp_rng_c[1]);
+
+					//std::cout << arma::sum(arma::sum(Jmin[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) != JJ, 1)) << "/";
+					//std::cout << arma::sum(arma::sum(Optctrl_row[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) != RR, 1))<<"/";
+					//std::cout << arma::sum(arma::sum(Optctrl_col[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) != CC, 1))<<"/";
+					//std::cout << arma::sum(arma::sum(Optctrl_dirs[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) != DD, 1)) << std::endl;
+
+					//std::cout << Optctrl_col[tt].slice(ii).submat(original_rng_r[0], original_rng_c[0], original_rng_r[1], original_rng_c[1]) << std::endl;
+					//std::cout << CC << std::endl;
+
+					//std::cout << CompMat << std::endl;
 				}
 
 				//std::cout << nextstate_dir[ii].n_elem << std::endl;
@@ -417,14 +461,16 @@ void backRecursion(CCDPmap* ptr) {
 
 				//myPrint(Jmin_dir,false);
 				//myPrint(mindiridx, false);
+				//std::cout << "≤Û?" << std::endl;
 				//system("PAUSE");
-				
+
 			}
 			Jmin[tt] = Jmin[tt] + Lk;
+			//std::cout << Jmin[tt] << std::endl;
 		}
 
-		currs_idx(0, 0) = (s[1] - idxs_y[0]) / grid;
-		currs_idx(1, 0) = (s[0] - idxs_x[0]) / grid;
+		currs_idx(0, 0) = round(s[1] - idxs_y[0]) / grid;
+		currs_idx(1, 0) = round(s[0] - idxs_x[0]) / grid;
 		currs_idx(2, 0) = int(pS[2] / 2.0 / pi*ndir) % ndir - 1;
 		if (currs_idx(2, 0) == -1) currs_idx(2, 0) = 9;
 		int Costconst_val = 0;
@@ -491,8 +537,9 @@ void backRecursion(CCDPmap* ptr) {
 	std::cout << std::endl;
 	std::cout << "  V: " << uv_opt << "  U: " << uw_opt << std::endl;
 	std::cout << "human position: (" << pT_est[0] << ", " << pT_est[1] << ")" << std::endl;
-	std::cout << "robot position: (" << pS[0] << ", " << pS[1] << ", " << pS[2]*180.0/2.0/pi << ", num: "<< currs_idx(2, 0) << " " << optidx(2,0) <<  ")"  << std::endl;
+	std::cout << "robot position: (" << pS[0] << ", " << pS[1] << ", " << (pS[2]-pi)*180.0/2.0/pi << ", num: "<< currs_idx(2, 0) << " " << optidx(2,0) <<  ")"  << std::endl;
 	myPrint(Cost_track[1].slice(currs_idx(2, 0)));
+
 
 
 

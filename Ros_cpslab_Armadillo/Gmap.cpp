@@ -3,12 +3,12 @@
 #include <iostream>
 
 Gmap::Gmap(){
-	Gmap::load_map(1);
+	Gmap::load_map(1, true);
 	Gmap::set_global_map();
 }
 
-Gmap::Gmap(int map_number){
-	Gmap::load_map(map_number);
+Gmap::Gmap(int map_number, bool object=true){
+	Gmap::load_map(map_number, object);
 	Gmap::set_global_map();
 }
 
@@ -26,7 +26,7 @@ Gmap::~Gmap(){
 
 
 
-void Gmap::load_map(int num_map){
+void Gmap::load_map(int num_map, bool object){
 	switch(num_map){
 	case 1:
 		grid = 0.5;
@@ -36,12 +36,13 @@ void Gmap::load_map(int num_map){
 		y_rng = {-10, 10};
 		x_len = x_rng[1] - x_rng[0];
 		y_len = y_rng[1] - y_rng[0];
-
-		Gmap::setObjects(2, 2, 2, 3, 0); //box1
-		Gmap::setObjects(-4.5, -4.5, 4, 4, 0); //box2
-		Gmap::setObjects(-3.5, 4, 3, 3, 0); //box3
-		Gmap::setObjects(3, -7, 3, 3, 0); //box4
-		Gmap::setObjects(7, 5.5, 2, 2, 0); //box5
+		if (object) {
+			Gmap::setObjects(2, 2, 2, 3, 0); //box1
+			Gmap::setObjects(-4.5, -4.5, 4, 4, 0); //box2
+			Gmap::setObjects(-3.5, 4, 3, 3, 0); //box3
+			Gmap::setObjects(3, -7, 3, 3, 0); //box4
+			Gmap::setObjects(7, 5.5, 2, 2, 0); //box5
+		}
 		break;
 	
 	}
