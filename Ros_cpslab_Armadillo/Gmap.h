@@ -3,6 +3,7 @@
 
 #define ARMA_USE_CXX11
 #include <armadillo>
+//#include </usr/include/armadillo>
 
 class Gmap {
 private:
@@ -18,7 +19,7 @@ private:
 	arma::rowvec xaxis;
 	arma::rowvec yaxis;
 
-	
+
 	arma::mat global_map;
 
 public:
@@ -34,14 +35,15 @@ public:
 	std::vector<float> getYrng() const;
 	arma::rowvec get_xaxis();
 	arma::rowvec get_yaxis();
-	
+
 	void set_global_map();
 	arma::mat getGlobalmap() const;
 	void printGlobalmap() const;
 
 	void getObjects() const;
-	void setObjects(float x, float y, float xlen, float ylen, float degree);
+	void setObjects(float x, float y, float xlen, float ylen, float degree, int num);
 
+	int getGmap_num_yaxis();
+	int getGmap_num_xaxis();
 
-	
 };

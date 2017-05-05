@@ -152,21 +152,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CCDPmap.h" />
-    <ClInclude Include="Cost_avoid.h" />
-    <ClInclude Include="Cost_track.h" />
-    <ClInclude Include="Cost_visual.h" />
     <ClInclude Include="Gmap.h" />
-    <ClInclude Include="Robot.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CCDPmap.cpp" />
-    <ClCompile Include="Cost_avoid.cpp" />
-    <ClCompile Include="Cost_track.cpp" />
-    <ClCompile Include="Cost_visual.cpp" />
     <ClCompile Include="Gmap.cpp" />
-    <ClCompile Include="Robot.cpp" />
     <ClCompile Include="Ros_cpslab_Armadillo.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

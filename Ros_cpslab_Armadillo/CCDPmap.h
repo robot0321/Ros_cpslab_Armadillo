@@ -1,9 +1,10 @@
 #pragma once
 #include <vector>
 #include "Gmap.h"
+//#include <test1/Gmap.h>
 
 #ifndef PI
-	#define PI 3.141593
+#define PI 3.141593
 #endif // !
 
 
@@ -20,7 +21,7 @@ private:
 	int nvis;
 	int H_step;
 	float threshold_track;
-	
+
 	arma::mat local_map;
 
 
@@ -41,6 +42,8 @@ public:
 	void printLocalmap() const;
 
 	float getGrid();
+	int getLocal_num_x();
+	int getLocal_num_y();
 
 	/*
 	void setCost_visual(int y, int x);

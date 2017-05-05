@@ -24,19 +24,7 @@
     <ClInclude Include="targetver.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="Robot.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="Gmap.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Cost_avoid.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Cost_track.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Cost_visual.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="CCDPmap.h">
@@ -48,18 +36,6 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Ros_cpslab_Armadillo.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Robot.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Cost_avoid.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Cost_track.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Cost_visual.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Gmap.cpp">
